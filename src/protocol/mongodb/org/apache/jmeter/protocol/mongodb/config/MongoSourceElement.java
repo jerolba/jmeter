@@ -19,7 +19,11 @@
 package org.apache.jmeter.protocol.mongodb.config;
 
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.jmeter.config.ConfigElement;
 import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.protocol.mongodb.mongo.MongoDB;
@@ -31,13 +35,12 @@ import org.apache.jorphan.logging.LoggingManager;
 import org.apache.log.Logger;
 
 import com.mongodb.MongoClientOptions;
+import com.mongodb.MongoCredential;
 import com.mongodb.WriteConcern;
 
 /**
  */
-public class MongoSourceElement
-    extends ConfigTestElement
-        implements TestStateListener, TestBean {
+public class MongoSourceElement extends ConfigTestElement implements TestStateListener, TestBean {
 
     /**
      * 
@@ -48,42 +51,126 @@ public class MongoSourceElement
 
     private String connection;
     private String source;
-    private boolean autoConnectRetry;
-    private int connectionsPerHost;
-    private int connectTimeout;
-    private long maxAutoConnectRetryTime;
+
+    private String database;
+    private String username;
+    private String password;
+
+    private int minConnectionsPerHost;
+    private int maxConnectionsPerHost;
     private int maxWaitTime;
+    private int maxConnectionIdleTime;
+    private int maxConnectionLifeTime;
+    private int threadsAllowedToBlockForConnectionMultiplier;
+    private int connectTimeout;
     private int socketTimeout;
     private boolean socketKeepAlive;
-    private int threadsAllowedToBlockForConnectionMultiplier;
-    private boolean fsync;
-    private boolean safe;
-    private boolean waitForJournaling;
-    private int writeOperationNumberOfServers;
-    private int writeOperationTimeout;
-    private boolean continueOnInsertError;
-    
-//    public final static String CONNECTION = "MongoSourceElement.connection"; //$NON-NLS-1$
-//    public final static String SOURCE = "MongoSourceElement.source"; //$NON-NLS-1$
-//
-//    public final static String AUTO_CONNECT_RETRY = "MongoSourceElement.autoConnectRetry"; //$NON-NLS-1$
-//    public final static String CONNECTIONS_PER_HOST = "MongoSourceElement.connectionsPerHost"; //$NON-NLS-1$
-//    public final static String CONNECT_TIMEOUT = "MongoSourceElement.connectTimeout"; //$NON-NLS-1$
-//    public final static String CONTINUE_ON_INSERT_ERROR = "MongoSourceElement.continueOnInsertError"; //$NON-NLS-1$
-//    public final static String MAX_AUTO_CONNECT_RETRY_TIME = "MongoSourceElement.maxAutoConnectRetryTime"; //$NON-NLS-1$
-//    public final static String MAX_WAIT_TIME = "MongoSourceElement.maxWaitTime"; //$NON-NLS-1$
-//    public final static String SOCKET_TIMEOUT = "MongoSourceElement.socketTimeout"; //$NON-NLS-1$
-//    public final static String SOCKET_KEEP_ALIVE = "MongoSourceElement.socketKeepAlive"; //$NON-NLS-1$
-//    public final static String THREADS_ALLOWED_TO_BLOCK_MULTIPLIER = "MongoSourceElement.threadsAllowedToBlockForConnectionMultiplier"; //$NON-NLS-1$
-//
-//    public final static String FSYNC = "MongoSourceElement.fsync"; //$NON-NLS-1$
-//    public final static String SAFE = "MongoSourceElement.safe"; //$NON-NLS-1$
-//    public final static String WAIT_FOR_JOURNALING = "MongoSourceElement.waitForJournaling"; //$NON-NLS-1$
-//    public final static String WRITE_OPERATION_NUMBER_OF_SERVERS = "MongoSourceElement.writeOperationNumberOfServers"; //$NON-NLS-1$
-//    public final static String WRITE_OPERATION_TIMEOUT = "MongoSourceElement.writeOperationTimeout"; //$NON-NLS-1$
+    private int heartbeatConnectTimeout;
+    private int heartbeatSocketTimeout;
+    private int heartbeatFrequency;
+    private int minHeartbeatFrequency;
+    private boolean sslEnabled;
+    private boolean sslInvalidHostNameAllowed;
+    private int writers;
+    private int writeTimeout;
+    private Boolean fsync = false;
+    private Boolean journal = false;
 
     public String getTitle() {
         return this.getName();
+    }
+
+    public static MongoDB getMongoDB(String source) {
+
+        Object mongoSource = JMeterContextService.getContext().getVariables().getObject(source);
+
+        if (mongoSource == null) {
+            throw new IllegalStateException("mongoSource is null");
+        } else {
+            if (mongoSource instanceof MongoDB) {
+                return (MongoDB) mongoSource;
+            } else {
+                throw new IllegalStateException(
+                        "Variable:" + source + " is not a MongoDB instance, class:" + mongoSource.getClass());
+            }
+        }
+    }
+
+    @Override
+    public void addConfigElement(ConfigElement configElement) {
+    }
+
+    @Override
+    public boolean expectsModification() {
+        return false;
+    }
+
+    @Override
+    public void testStarted() {
+        if (log.isDebugEnabled()) {
+            log.debug(getTitle() + " testStarted");
+        }
+
+        if (getThreadContext().getVariables().getObject(getSource()) != null) {
+            if (log.isWarnEnabled()) {
+                log.warn(getSource() + " has already been defined.");
+            }
+            return;
+        }
+
+        MongoClientOptions.Builder builder = MongoClientOptions.builder().minConnectionsPerHost(minConnectionsPerHost)
+                .connectionsPerHost(maxConnectionsPerHost).maxWaitTime(maxWaitTime)
+                .maxConnectionIdleTime(maxConnectionIdleTime).maxConnectionLifeTime(maxConnectionLifeTime)
+                .threadsAllowedToBlockForConnectionMultiplier(threadsAllowedToBlockForConnectionMultiplier)
+                .connectTimeout(connectTimeout).socketTimeout(socketTimeout).socketKeepAlive(socketKeepAlive)
+                .heartbeatConnectTimeout(heartbeatConnectTimeout).heartbeatSocketTimeout(heartbeatSocketTimeout)
+                .heartbeatFrequency(heartbeatFrequency).minHeartbeatFrequency(minHeartbeatFrequency)
+                .sslEnabled(sslEnabled).sslInvalidHostNameAllowed(sslInvalidHostNameAllowed);
+
+        WriteConcern wc = new WriteConcern(writers).withWTimeout(writeTimeout, TimeUnit.MILLISECONDS)
+                .withFsync(fsync == null ? false : fsync).withJournal(journal == null ? false : journal);
+
+        builder.writeConcern(wc);
+
+        List<MongoCredential> credentials = new ArrayList<>();
+        if (StringUtils.isNoneBlank(database, username, password)) {
+            MongoCredential credential = MongoCredential.createCredential(username, database, password.toCharArray());
+            credentials.add(credential);
+        }
+
+        MongoClientOptions mongoOptions = builder.build();
+
+        if (log.isDebugEnabled()) {
+            log.debug("options : " + mongoOptions.toString());
+        }
+
+        if (log.isDebugEnabled()) {
+            log.debug(getSource() + "  is being defined.");
+        }
+        try {
+            getThreadContext().getVariables().putObject(getSource(),
+                    new MongoDB(MongoUtils.toServerAddresses(getConnection()), mongoOptions, credentials));
+        } catch (UnknownHostException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @Override
+    public void testStarted(String s) {
+        testStarted();
+    }
+
+    @Override
+    public void testEnded() {
+        if (log.isDebugEnabled()) {
+            log.debug(getTitle() + " testEnded");
+        }
+        ((MongoDB) getThreadContext().getVariables().getObject(getSource())).clear();
+    }
+
+    @Override
+    public void testEnded(String s) {
+        testEnded();
     }
 
     public String getConnection() {
@@ -102,297 +189,180 @@ public class MongoSourceElement
         this.source = source;
     }
 
-
-
-    public static MongoDB getMongoDB(String source) {
-
-        Object mongoSource = JMeterContextService.getContext().getVariables().getObject(source);
-
-        if(mongoSource == null) {
-            throw new IllegalStateException("mongoSource is null");
-        }
-        else {
-            if(mongoSource instanceof MongoDB) {
-                return (MongoDB)mongoSource;
-            }
-            else {
-                throw new IllegalStateException("Variable:"+ source +" is not a MongoDB instance, class:"+mongoSource.getClass());
-            }
-        }
+    public String getDatabase() {
+        return database;
     }
 
-    @Override
-    public void addConfigElement(ConfigElement configElement) {
+    public void setDatabase(String database) {
+        this.database = database;
     }
 
-    @Override
-    public boolean expectsModification() {
-        return false;
+    public String getUsername() {
+        return username;
     }
 
-    @Override
-    public void testStarted() {
-        if(log.isDebugEnabled()) {
-            log.debug(getTitle() + " testStarted");
-        }
-
-        MongoClientOptions.Builder builder = MongoClientOptions.builder()
-                .autoConnectRetry(getAutoConnectRetry())
-                .connectTimeout(getConnectTimeout())
-                .connectionsPerHost(getConnectionsPerHost())
-                .maxAutoConnectRetryTime(getMaxAutoConnectRetryTime())
-                .maxWaitTime(getMaxWaitTime())
-                .socketKeepAlive(getSocketKeepAlive())
-                .socketTimeout(getSocketTimeout())
-                .threadsAllowedToBlockForConnectionMultiplier(
-                        getThreadsAllowedToBlockForConnectionMultiplier());
-     
-        if(getSafe()) {
-            builder.writeConcern(WriteConcern.SAFE);
-        } else {
-            builder.writeConcern(new WriteConcern(
-                    getWriteOperationNumberOfServers(),
-                    getWriteOperationTimeout(),
-                    getFsync(),
-                    getWaitForJournaling(),
-                    getContinueOnInsertError()
-                    ));
-        }
-        MongoClientOptions mongoOptions = builder.build();
-
-        if(log.isDebugEnabled()) {
-            log.debug("options : " + mongoOptions.toString());
-        }
-
-        if(getThreadContext().getVariables().getObject(getSource()) != null) {
-            if(log.isWarnEnabled()) {
-                log.warn(getSource() + " has already been defined.");
-            }
-        }
-        else {
-            if(log.isDebugEnabled()) {
-                log.debug(getSource() + "  is being defined.");
-            }
-            try {
-                getThreadContext().getVariables().putObject(getSource(), new MongoDB(MongoUtils.toServerAddresses(getConnection()), mongoOptions));
-            } catch (UnknownHostException e) {
-                throw new IllegalStateException(e);
-            }
-        }
+    public void setUsername(String username) {
+        this.username = username;
     }
 
-    @Override
-    public void testStarted(String s) {
-        testStarted();
+    public String getPassword() {
+        return password;
     }
 
-    @Override
-    public void testEnded() {
-        if(log.isDebugEnabled()) {
-            log.debug(getTitle() + " testEnded");
-        }
-        ((MongoDB)getThreadContext().getVariables().getObject(getSource())).clear();
+    public void setPassword(String password) {
+        this.password = password;
     }
 
-    @Override
-    public void testEnded(String s) {
-        testEnded();
+    public int getMinConnectionsPerHost() {
+        return minConnectionsPerHost;
     }
 
-    /**
-     * @return the autoConnectRetry
-     */
-    public boolean getAutoConnectRetry() {
-        return autoConnectRetry;
+    public void setMinConnectionsPerHost(int minConnectionsPerHost) {
+        this.minConnectionsPerHost = minConnectionsPerHost;
     }
 
-    /**
-     * @param autoConnectRetry the autoConnectRetry to set
-     */
-    public void setAutoConnectRetry(boolean autoConnectRetry) {
-        this.autoConnectRetry = autoConnectRetry;
+    public int getMaxConnectionsPerHost() {
+        return maxConnectionsPerHost;
     }
 
-    /**
-     * @return the connectionsPerHost
-     */
-    public int getConnectionsPerHost() {
-        return connectionsPerHost;
+    public void setMaxConnectionsPerHost(int maxConnectionsPerHost) {
+        this.maxConnectionsPerHost = maxConnectionsPerHost;
     }
 
-    /**
-     * @param connectionsPerHost the connectionsPerHost to set
-     */
-    public void setConnectionsPerHost(int connectionsPerHost) {
-        this.connectionsPerHost = connectionsPerHost;
-    }
-
-    /**
-     * @return the connectTimeout
-     */
-    public int getConnectTimeout() {
-        return connectTimeout;
-    }
-
-    /**
-     * @param connectTimeout the connectTimeout to set
-     */
-    public void setConnectTimeout(int connectTimeout) {
-        this.connectTimeout = connectTimeout;
-    }
-
-    /**
-     * @return the maxAutoConnectRetryTime
-     */
-    public long getMaxAutoConnectRetryTime() {
-        return maxAutoConnectRetryTime;
-    }
-
-    /**
-     * @param maxAutoConnectRetryTime the maxAutoConnectRetryTime to set
-     */
-    public void setMaxAutoConnectRetryTime(long maxAutoConnectRetryTime) {
-        this.maxAutoConnectRetryTime = maxAutoConnectRetryTime;
-    }
-
-    /**
-     * @return the maxWaitTime
-     */
     public int getMaxWaitTime() {
         return maxWaitTime;
     }
 
-    /**
-     * @param maxWaitTime the maxWaitTime to set
-     */
     public void setMaxWaitTime(int maxWaitTime) {
         this.maxWaitTime = maxWaitTime;
     }
 
-    /**
-     * @return the socketTimeout
-     */
-    public int getSocketTimeout() {
-        return socketTimeout;
+    public int getMaxConnectionIdleTime() {
+        return maxConnectionIdleTime;
     }
 
-    /**
-     * @param socketTimeout the socketTimeout to set
-     */
-    public void setSocketTimeout(int socketTimeout) {
-        this.socketTimeout = socketTimeout;
+    public void setMaxConnectionIdleTime(int maxConnectionIdleTime) {
+        this.maxConnectionIdleTime = maxConnectionIdleTime;
     }
 
-    /**
-     * @return the socketKeepAlive
-     */
-    public boolean getSocketKeepAlive() {
-        return socketKeepAlive;
+    public int getMaxConnectionLifeTime() {
+        return maxConnectionLifeTime;
     }
 
-    /**
-     * @param socketKeepAlive the socketKeepAlive to set
-     */
-    public void setSocketKeepAlive(boolean socketKeepAlive) {
-        this.socketKeepAlive = socketKeepAlive;
+    public void setMaxConnectionLifeTime(int maxConnectionLifeTime) {
+        this.maxConnectionLifeTime = maxConnectionLifeTime;
     }
 
-    /**
-     * @return the threadsAllowedToBlockForConnectionMultiplier
-     */
     public int getThreadsAllowedToBlockForConnectionMultiplier() {
         return threadsAllowedToBlockForConnectionMultiplier;
     }
 
-    /**
-     * @param threadsAllowedToBlockForConnectionMultiplier the threadsAllowedToBlockForConnectionMultiplier to set
-     */
-    public void setThreadsAllowedToBlockForConnectionMultiplier(
-            int threadsAllowedToBlockForConnectionMultiplier) {
+    public void setThreadsAllowedToBlockForConnectionMultiplier(int threadsAllowedToBlockForConnectionMultiplier) {
         this.threadsAllowedToBlockForConnectionMultiplier = threadsAllowedToBlockForConnectionMultiplier;
     }
 
-    /**
-     * @return the fsync
-     */
-    public boolean getFsync() {
+    public int getConnectTimeout() {
+        return connectTimeout;
+    }
+
+    public void setConnectTimeout(int connectTimeout) {
+        this.connectTimeout = connectTimeout;
+    }
+
+    public int getSocketTimeout() {
+        return socketTimeout;
+    }
+
+    public void setSocketTimeout(int socketTimeout) {
+        this.socketTimeout = socketTimeout;
+    }
+
+    public boolean isSocketKeepAlive() {
+        return socketKeepAlive;
+    }
+
+    public void setSocketKeepAlive(boolean socketKeepAlive) {
+        this.socketKeepAlive = socketKeepAlive;
+    }
+
+    public int getHeartbeatConnectTimeout() {
+        return heartbeatConnectTimeout;
+    }
+
+    public void setHeartbeatConnectTimeout(int heartbeatConnectTimeout) {
+        this.heartbeatConnectTimeout = heartbeatConnectTimeout;
+    }
+
+    public int getHeartbeatSocketTimeout() {
+        return heartbeatSocketTimeout;
+    }
+
+    public void setHeartbeatSocketTimeout(int heartbeatSocketTimeout) {
+        this.heartbeatSocketTimeout = heartbeatSocketTimeout;
+    }
+
+    public int getHeartbeatFrequency() {
+        return heartbeatFrequency;
+    }
+
+    public void setHeartbeatFrequency(int heartbeatFrequency) {
+        this.heartbeatFrequency = heartbeatFrequency;
+    }
+
+    public int getMinHeartbeatFrequency() {
+        return minHeartbeatFrequency;
+    }
+
+    public void setMinHeartbeatFrequency(int minHeartbeatFrequency) {
+        this.minHeartbeatFrequency = minHeartbeatFrequency;
+    }
+
+    public boolean isSslEnabled() {
+        return sslEnabled;
+    }
+
+    public void setSslEnabled(boolean sslEnabled) {
+        this.sslEnabled = sslEnabled;
+    }
+
+    public boolean isSslInvalidHostNameAllowed() {
+        return sslInvalidHostNameAllowed;
+    }
+
+    public void setSslInvalidHostNameAllowed(boolean sslInvalidHostNameAllowed) {
+        this.sslInvalidHostNameAllowed = sslInvalidHostNameAllowed;
+    }
+
+    public int getWriters() {
+        return writers;
+    }
+
+    public void setWriters(int writers) {
+        this.writers = writers;
+    }
+
+    public int getWriteTimeout() {
+        return writeTimeout;
+    }
+
+    public void setWriteTimeout(int writeTimeout) {
+        this.writeTimeout = writeTimeout;
+    }
+
+    public Boolean getFsync() {
         return fsync;
     }
 
-    /**
-     * @param fsync the fsync to set
-     */
-    public void setFsync(boolean fsync) {
+    public void setFsync(Boolean fsync) {
         this.fsync = fsync;
     }
 
-    /**
-     * @return the safe
-     */
-    public boolean getSafe() {
-        return safe;
+    public Boolean getJournal() {
+        return journal;
     }
 
-    /**
-     * @param safe the safe to set
-     */
-    public void setSafe(boolean safe) {
-        this.safe = safe;
+    public void setJournal(Boolean journal) {
+        this.journal = journal;
     }
 
-    /**
-     * @return the waitForJournaling
-     */
-    public boolean getWaitForJournaling() {
-        return waitForJournaling;
-    }
-
-    /**
-     * @param waitForJournaling the waitForJournaling to set
-     */
-    public void setWaitForJournaling(boolean waitForJournaling) {
-        this.waitForJournaling = waitForJournaling;
-    }
-
-    /**
-     * @return the writeOperationNumberOfServers
-     */
-    public int getWriteOperationNumberOfServers() {
-        return writeOperationNumberOfServers;
-    }
-
-    /**
-     * @param writeOperationNumberOfServers the writeOperationNumberOfServers to set
-     */
-    public void setWriteOperationNumberOfServers(int writeOperationNumberOfServers) {
-        this.writeOperationNumberOfServers = writeOperationNumberOfServers;
-    }
-
-    /**
-     * @return the writeOperationTimeout
-     */
-    public int getWriteOperationTimeout() {
-        return writeOperationTimeout;
-    }
-
-    /**
-     * @param writeOperationTimeout the writeOperationTimeout to set
-     */
-    public void setWriteOperationTimeout(int writeOperationTimeout) {
-        this.writeOperationTimeout = writeOperationTimeout;
-    }
-
-    /**
-     * @return the continueOnInsertError
-     */
-    public boolean getContinueOnInsertError() {
-        return continueOnInsertError;
-    }
-
-    /**
-     * @param continueOnInsertError the continueOnInsertError to set
-     */
-    public void setContinueOnInsertError(boolean continueOnInsertError) {
-        this.continueOnInsertError = continueOnInsertError;
-    }
 }

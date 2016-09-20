@@ -38,9 +38,7 @@ public class MongoScriptSamplerBeanInfo
         //http://api.mongodb.org/java/2.7.2/com/mongodb/Mongo.html
         createPropertyGroup("mongodb", new String[] {
                 "source",
-                "database",
-                "username",
-                "password" });
+                "database"});
 
         createPropertyGroup("sampler", new String[]{
                 "script"});
@@ -48,12 +46,7 @@ public class MongoScriptSamplerBeanInfo
         PropertyDescriptor p = property("database");
         p.setValue(NOT_UNDEFINED, Boolean.TRUE);
         p.setValue(DEFAULT, "");
-        p = property("username");
-        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
-        p.setValue(DEFAULT, "");
-        p = property("password", TypeEditor.PasswordEditor);
-        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
-        p.setValue(DEFAULT, "");
+        
         p = property("source");
         p.setValue(NOT_UNDEFINED, Boolean.TRUE);
         p.setValue(DEFAULT, "");

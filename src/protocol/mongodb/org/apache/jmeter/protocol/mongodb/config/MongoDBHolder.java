@@ -18,39 +18,51 @@
 
 package org.apache.jmeter.protocol.mongodb.config;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.jmeter.protocol.mongodb.mongo.MongoDB;
 import org.apache.jmeter.threads.JMeterContextService;
+import org.bson.BsonDocument;
+import org.bson.Document;
 
 import com.mongodb.DB;
+import com.mongodb.client.FindIterable;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoCursor;
+import com.mongodb.client.MongoDatabase;
 
 /**
- * Public API to access MongoDB {@link DB} object created by {@link MongoSourceElement}
+ * Public API to access MongoDB {@link DB} object created by
+ * {@link MongoSourceElement}
  */
 public final class MongoDBHolder {
 
     /**
      * Get access to MongoDB object
-     * @param varName String MongoDB source
-     * @param dbName Mongo DB database name
+     * 
+     * @param varName
+     *            String MongoDB source
+     * @param dbName
+     *            Mongo DB database name
      * @return {@link DB}
      */
-    public static DB getDBFromSource(String varName, String dbName) {
-        return getDBFromSource(varName, dbName, null, null);
+    public static MongoDatabase getDBFromSource(String varName, String dbName) {
+        MongoDB mongodb = (MongoDB) JMeterContextService.getContext().getVariables().getObject(varName);
+        if (mongodb == null) {
+            throw new IllegalStateException(
+                    "You didn't define variable:" + varName + " using MongoDB Source Config (property:MongoDB Source)");
+        }
+        return mongodb.getDB(dbName);
     }
     
-    /**
-     * Get access to MongoDB object
-     * @param varName String MongoDB source
-     * @param dbName Mongo DB database name
-     * @param login name to use for login
-     * @param password password to use for login
-     * @return {@link DB}
-     */
-    public static DB getDBFromSource(String varName, String dbName, String login, String password) {
-        MongoDB mongodb = (MongoDB) JMeterContextService.getContext().getVariables().getObject(varName);
-        if(mongodb==null) {
-            throw new IllegalStateException("You didn't define variable:"+varName +" using MongoDB Source Config (property:MongoDB Source)");
+    public static List<Document> consumeQuery(MongoCollection<Document> coll, BsonDocument query){
+        FindIterable<Document> result = coll.find(query);
+        MongoCursor<Document> iterator = result.batchSize(100).iterator();
+        ArrayList<Document> docs = new ArrayList<>();
+        if (iterator.hasNext()){
+            docs.add(iterator.next());
         }
-        return mongodb.getDB(dbName, login, password);
+        return docs;
     }
 }

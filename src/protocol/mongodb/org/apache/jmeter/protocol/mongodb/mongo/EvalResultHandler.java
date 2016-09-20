@@ -18,8 +18,7 @@
 
 package org.apache.jmeter.protocol.mongodb.mongo;
 
-import com.mongodb.DBObject;
-import com.mongodb.util.JSON;
+import org.bson.Document;
 
 /**
  */
@@ -40,8 +39,8 @@ public class EvalResultHandler {
         else if(o instanceof String) {
             return this.handle((String)o);
         }
-        else if(o instanceof DBObject) {
-            return this.handle((DBObject)o);
+        else if(o instanceof Document) {
+            return this.handle((Document) o);
         }
         else {
             return "return type not handled";
@@ -61,7 +60,7 @@ public class EvalResultHandler {
     }
 
 
-    public String handle(DBObject o) {
-        return JSON.serialize(o);
+    public String handle(Document o) {
+        return o.toJson();
     }
 }

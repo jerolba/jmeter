@@ -18,51 +18,34 @@
 
 package org.apache.jmeter.protocol.mongodb.sampler;
 
-import org.apache.jorphan.logging.LoggingManager;
-import org.apache.log.Logger;
+import org.bson.BsonDocument;
+import org.bson.Document;
 
-import com.mongodb.DB;
+import com.mongodb.client.MongoDatabase;
 
 /**
  */
 public class MongoScriptRunner {
-
-    private static final Logger log = LoggingManager.getLoggerForClass();
 
     public MongoScriptRunner() {
         super();
     }
 
     /**
-     * Evaluate a script on the database
+     * Evaluate a command on the database
      *
      * @param db
      *            database connection to use
      * @param script
-     *            script to evaluate on the database
+     *            document with command to evaluate on the database
      * @return result of evaluation on the database
      * @throws Exception
      *             when evaluation on the database fails
      */
-    public Object evaluate(DB db, String script)
-        throws Exception {
 
-        if(log.isDebugEnabled()) {
-            log.debug("database: " + db.getName()+", script: " + script);
-        }
-
-        db.requestStart();
-        try {
-            db.requestEnsureConnection();
-    
-            Object result = db.eval(script);
-    
-            if(log.isDebugEnabled()) {
-                log.debug("Result : " + result);
-            }
-            return result;
-        } finally {
-            db.requestDone();
-        }
+    public Document command(MongoDatabase db, String document) throws Exception {
+        BsonDocument bsonDocument = BsonDocument.parse(document);
+        Document result = db.runCommand(bsonDocument);
+        return result;
     }
 }

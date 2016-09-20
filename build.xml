@@ -411,7 +411,10 @@
     <include name="${lib.dir}/${jsoup.jar}"/>
     <include name="${lib.dir}/${junit.jar}"/>
     <include name="${lib.dir}/${logkit.jar}"/>
-    <include name="${lib.dir}/${mongo-java-driver.jar}"/>
+    <!--include name="${lib.dir}/${mongo-java-driver.jar}"/-->
+	<include name="${lib.dir}/${mongodb-driver.jar}"/>
+	<include name="${lib.dir}/${mongodb-driver-core.jar}"/>
+	<include name="${lib.dir}/${bson.jar}"/>
     <include name="${lib.dir}/${ph-css.jar}"/>
     <include name="${lib.dir}/${ph-commons.jar}"/>
     <include name="${lib.dir}/${rsyntaxtextarea.jar}"/>
@@ -488,7 +491,10 @@
     <pathelement location="${lib.dir}/${jsoup.jar}"/>
     <pathelement location="${lib.dir}/${junit.jar}"/>
     <pathelement location="${lib.dir}/${logkit.jar}"/>
-    <pathelement location="${lib.dir}/${mongo-java-driver.jar}"/>
+    <!--pathelement location="${lib.dir}/${mongo-java-driver.jar}"/-->
+	<pathelement location="${lib.dir}/${mongodb-driver.jar}"/>
+	<pathelement location="${lib.dir}/${mongodb-driver-core.jar}"/>
+	<pathelement location="${lib.dir}/${bson.jar}"/>
     <pathelement location="${lib.dir}/${ph-css.jar}"/>
     <pathelement location="${lib.dir}/${ph-commons.jar}"/>
     <pathelement location="${lib.dir}/${rsyntaxtextarea.jar}"/>
@@ -2998,7 +3004,10 @@ run JMeter unless all the JMeter jars are added.
     <process_jarfile jarname="jsoup"/>
     <process_jarfile jarname="junit"/>
     <process_jarfile jarname="logkit"/>
-    <process_jarfile jarname="mongo-java-driver"/>
+    <!--process_jarfile jarname="mongo-java-driver"/-->
+	<process_jarfile jarname="mongodb-driver"/>
+	<process_jarfile jarname="mongodb-driver-core"/>
+	<process_jarfile jarname="bson"/>
     <process_jarfile jarname="ph-css" />
     <process_jarfile jarname="ph-commons" />
     <process_jarfile jarname="rsyntaxtextarea"/>

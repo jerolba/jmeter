@@ -28,7 +28,7 @@ import org.apache.jmeter.testbeans.TestBean;
 import org.apache.jorphan.logging.LoggingManager;
 import org.apache.log.Logger;
 
-import com.mongodb.DB;
+import com.mongodb.client.MongoDatabase;
 
 /**
  */
@@ -41,10 +41,7 @@ public class MongoScriptSampler
     private static final Logger log = LoggingManager.getLoggerForClass();
 
     public final static String SOURCE = "MongoScriptSampler.source"; //$NON-NLS-1$
-
     public final static String DATABASE = "MongoScriptSampler.database"; //$NON-NLS-1$
-    public final static String USERNAME = "MongoScriptSampler.username"; //$NON-NLS-1$
-    public final static String PASSWORD = "MongoScriptSampler.password"; //$NON-NLS-1$
     public final static String SCRIPT = "MongoScriptSampler.script"; //$NON-NLS-1$
 
 
@@ -72,9 +69,9 @@ public class MongoScriptSampler
         try {
             MongoDB mongoDB = MongoSourceElement.getMongoDB(getSource());
             MongoScriptRunner runner = new MongoScriptRunner();
-            DB db = mongoDB.getDB(getDatabase(), getUsername(), getPassword());
+            MongoDatabase db = mongoDB.getDB(getDatabase());
             res.latencyEnd();
-            Object result = runner.evaluate(db, data);
+            Object result = runner.command(db, data);
             EvalResultHandler handler = new EvalResultHandler();
             String resultAsString = handler.handle(result);
             res.setResponseData(resultAsString.getBytes());
@@ -108,23 +105,7 @@ public class MongoScriptSampler
     public void setDatabase(String database) {
         setProperty(DATABASE, database);
     }
-
-    public String getUsername() {
-        return getPropertyAsString(USERNAME);
-    }
-
-    public void setUsername(String username) {
-        setProperty(USERNAME, username);
-    }
-
-    public String getPassword() {
-        return getPropertyAsString(PASSWORD);
-    }
-
-    public void setPassword(String password) {
-        setProperty(PASSWORD, password);
-    }
-
+    
     public String getSource() {
         return getPropertyAsString(SOURCE);
     }

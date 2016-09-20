@@ -23,11 +23,11 @@ import java.util.List;
 import org.apache.jorphan.logging.LoggingManager;
 import org.apache.log.Logger;
 
-import com.mongodb.DB;
-import com.mongodb.Mongo;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientOptions;
+import com.mongodb.MongoCredential;
 import com.mongodb.ServerAddress;
+import com.mongodb.client.MongoDatabase;
 
 /**
  */
@@ -36,30 +36,21 @@ public class MongoDB {
     private static final Logger log = LoggingManager.getLoggerForClass();
 
     // Mongo is Thread Safe
-    private Mongo mongo = null;
-
+    private MongoClient mongo = null;
+    
     public MongoDB(
             List<ServerAddress> serverAddresses,
-            MongoClientOptions mongoOptions) {
-        mongo = new MongoClient(serverAddresses, mongoOptions);   
+            MongoClientOptions mongoOptions,
+            List<MongoCredential> credentials) {
+        mongo = new MongoClient(serverAddresses, credentials, mongoOptions);   
     }
 
-    public DB getDB(String database, String username, String password) {
+    public MongoDatabase getDB(String database) {
 
         if(log.isDebugEnabled()) {
-            log.debug("username: " + username+", password: " + password+", database: " + database);
+            log.debug("database: "+ database);
         }
-        DB db = mongo.getDB(database);
-        boolean authenticated = db.isAuthenticated();
-
-        if(!authenticated) {
-            if(username != null && password != null && username.length() > 0 && password.length() > 0) {
-                authenticated = db.authenticate(username, password.toCharArray());
-            }
-        }
-        if(log.isDebugEnabled()) {
-            log.debug("authenticated: " + authenticated);
-        }
+        MongoDatabase db = mongo.getDatabase(database);
         return db;
     }
 
