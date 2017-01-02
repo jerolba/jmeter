@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -264,17 +265,60 @@ public final class ClassFinder {
         return findClasses(searchPathsOrJars, filter);
     }
     
-    public static List<String> findClasses(String[] searchPathsOrJars, ClassFilter filter) throws IOException  {
+    
+    private static List<String> findClasses(File directory, String packageName) {
+        List<String> classes = new ArrayList<String>();
+        if (!directory.exists()) {
+            return classes;
+        }
+        File[] files = directory.listFiles();
+        for (File file : files) {
+            if (file.isDirectory()) {
+                assert !file.getName().contains(".");
+                classes.addAll(findClasses(file, packageName + "." + file.getName()));
+            } else if (file.getName().endsWith(".class")) {
+                String name = packageName + '.' + file.getName().substring(0, file.getName().length() - 6);
+                if (name.startsWith(".")) {
+                    name = name.substring(1);
+                }
+                classes.add(name);
+            }
+        }
+        return classes;
+    }
+    
+    public static List<String> findClasses(String[] searchPathsOrJars, ClassFilter filter) throws IOException {
+        String packageName = "org.apache.jmeter";
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        Enumeration<URL> resources = classLoader.getResources(packageName.replace('.', '/'));
+        List<File> dirs = new ArrayList<File>();
+        while (resources.hasMoreElements()) {
+            URL resource = resources.nextElement();
+            File f = new File(resource.getFile());
+            if (f.isDirectory()) {
+                dirs.add(f);
+            }
+        }
+        ArrayList<String> classes = new ArrayList<String>();
+        for (File directory : dirs) {
+            List<String> findClasses = findClasses(directory, packageName);
+            for (String cls : findClasses) {
+                if (filter.accept(cls)) {
+                    classes.add(cls);
+                }
+            }
+        }
+
         if (log.isDebugEnabled()) {
             log.debug("searchPathsOrJars : " + Arrays.toString(searchPathsOrJars));
         }
-    
+
         // Find all jars in the search path
         String[] strPathsOrJars = addJarsInPath(searchPathsOrJars);
         for (int k = 0; k < strPathsOrJars.length; k++) {
             strPathsOrJars[k] = fixPathEntry(strPathsOrJars[k]);
         }
-    
+
         // Now eliminate any classpath entries that do not "match" the search
         List<String> listPaths = getClasspathMatches(strPathsOrJars);
         if (log.isDebugEnabled()) {
@@ -282,15 +326,16 @@ public final class ClassFinder {
                 log.debug("listPaths : " + path);
             }
         }
-    
+
         Set<String> listClasses = new TreeSet<>();
         // first get all the classes
         for (String path : listPaths) {
             findClassesInOnePath(path, listClasses, filter);
         }
-        
+        listClasses.addAll(classes);
+
         if (log.isDebugEnabled()) {
-            log.debug("listClasses.size()="+listClasses.size());
+            log.debug("listClasses.size()=" + listClasses.size());
             for (String clazz : listClasses) {
                 log.debug("listClasses : " + clazz);
             }
